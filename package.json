@@ -1,0 +1,24 @@
+{
+  "name": "hugo-netlify-cms-config-generator",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrew-paterson/hugo-netlify-cms-config-generator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/andrew-paterson/hugo-netlify-cms-config-generator/issues"
+  },
+  "homepage": "https://github.com/andrew-paterson/hugo-netlify-cms-config-generator#readme",
+  "description": "Reads yor markdown files in the content directory and auto generates Netlify CMS config.yml entries based on the fields in your content files",
+  "dependencies": {
+    "eslint": "^8.11.0",
+    "lodash.merge": "^4.6.2",
+    "node-sundries": "0.0.2"
+  }
+}
