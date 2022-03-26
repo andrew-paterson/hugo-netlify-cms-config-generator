@@ -17,16 +17,44 @@ module.exports = {
         }
       ]
     };
+    dirs.forEach(dir => {
+      const collection = {
+        name: path.basename(dir),
+        label: lib.capitaliseFirstChar(path.basename(dir).replace(/_/g, ' ').replace('-', ' ')),
+        folder: `content/${path.basename(dir)}`,
+        create: true,
+        slug: '{{year}}-{{month}}-{{day}}-{{slug}}',
+        filter: `{field: type, value: ${dir}}`
+      };
+      const combinedFrontmatterJS = {};
+      lib.getFiles(dir).forEach(file => {
+        merge(combinedFrontmatterJS, this.getFrontMatter(file));
+      });
+      collection.fields = this.generateFieldsFromFrontmatter(combinedFrontmatterJS, opts).concat(this.defaultFields(dir, opts));
+      final.collections.push(collection);
+    });
     fs.writeFileSync('./trash/out.json', JSON.stringify(final, null, 2));
-
   },
+
+  defaultFields(file, opts) {
+    return (opts.defaultFields || []).filter(defaultField => {
+      return (defaultField.exclude || []).indexOf(path.basename(file, '.md'));
+    }).map(defaultField => defaultField.field);
+  },
+
   doFile(file, opts) {
-    const fileContents = fs.readFileSync(file, 'utf8');
-    const firstLine = fileContents.split(/\r?\n/)[0].trim();    
-    const frontMatter = fileContents.split(firstLine)[1];
-    const frontmatterJS = (lib.yamlToJs(frontMatter) || [])[0];
-    fs.writeFileSync('./trash/frontmatter.json', JSON.stringify(frontmatterJS, null, 2));
-    const parseLevel = (obj, parents) => {
+    const frontmatterJS = this.getFrontMatter(file);
+    const defaultFields = this.defaultFields(file, opts);
+    return {
+      label: lib.capitaliseFirstChar(lib.basenameNoExt(file).replace(/_/g, ' ')),
+      name: lib.basenameNoExt(file),
+      file: `/content/${path.basename(file)}`,
+      fields: this.generateFieldsFromFrontmatter(frontmatterJS, opts).concat(defaultFields)
+    };
+  },
+
+  generateFieldsFromFrontmatter(frontmatterJS, opts) {
+    const parseLevel = (obj) => {
       const fields = [];
       for (const key in obj) {
         let type;
@@ -43,13 +71,20 @@ module.exports = {
           widget: type,
           required: false
         };
-
         const keyMappings = opts.keyMappings || [];
         const match  = keyMappings.find(item => item.keys.indexOf(field.name) > -1);
         if (match) {
+          const matchField = match.field;
+          for (const key in matchField) {
+            if (typeof matchField[key] === 'function') {
+              console.log(key);
+              const newValue = matchField[key](field.name, opts);
+              matchField[key] = newValue;
+            }
+          }
+
           field = merge(field, match.field);
         }
-
         if (type === 'object') {
           field['fields'] = parseLevel(obj[key]);
         } else if (type === 'list') {
@@ -67,11 +102,13 @@ module.exports = {
       }
       return fields;
     };
-    return {
-      label: lib.capitaliseFirstChar(lib.basenameNoExt(file).replace(/_/g, ' ')),
-      name: lib.basenameNoExt(file),
-      file: `/content/${path.basename(file)}`,
-      fields: parseLevel(frontmatterJS)
-    };
+    return parseLevel(frontmatterJS);
+  },
+
+  getFrontMatter(file) {
+    const fileContents = fs.readFileSync(file, 'utf8');
+    const firstLine = fileContents.split(/\r?\n/)[0].trim();    
+    const frontMatter = fileContents.split(firstLine)[1];
+    return (lib.yamlToJs(frontMatter) || [])[0];
   }
 };

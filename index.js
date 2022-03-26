@@ -19,5 +19,22 @@ functions.run(path, {
       media_folder: '/static/media/images/wines',
       public_folder: '/media/images/wines'
     }
+  }, {
+    keys: ['type'],
+    field: {
+      name: 'type',
+      widget: 'hidden',
+      default: function(fieldName, opts) {
+        return fieldName;
+      }
+    }
+  }],
+  defaultFields: [{
+    field: {
+      name: 'body',
+      label: 'Body',
+      widget: 'markdown'
+    }, 
+    exclude: ['importers']
   }]
 });
