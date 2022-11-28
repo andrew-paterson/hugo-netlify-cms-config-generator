@@ -19,6 +19,6 @@
   "dependencies": {
     "eslint": "^8.11.0",
     "lodash.merge": "^4.6.2",
-    "node-sundries": "0.0.2"
+    "node-sundries": "0.0.6"
   }
 }
