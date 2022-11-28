@@ -3,33 +3,40 @@ const fs   = require('fs');
 const yaml = require('js-yaml');
 const merge = require('lodash.merge');
 const path = require('path');
+const chalk = require('chalk');
 
 module.exports = {
   run(opts) {
-    const files = lib.getFiles(opts.source, false);
-    const dirs = lib.getDirs(opts.source, false);
-    const final = {
-      collections: [{
+    try {
+      const files = lib.getFiles((opts.source || './content'), false);
+      const dirs = lib.getDirs((opts.source || './content'), false);
+      const collections = [{
         name: 'single-pages',
         label: 'Single pages',
         files: files.map(file => this.doFile(file, opts))
-      }]
-    };
-    dirs.forEach(dir => {
-      const collection = {
-        name: path.basename(dir),
-        label: lib.capitaliseFirstChar(path.basename(dir).replace(/_/g, ' ').replace('-', ' ')),
-        folder: `content/${path.basename(dir)}`,
-      };
-      const combinedFrontmatterJS = {};
-      lib.getFiles(dir).forEach(file => {
-        merge(combinedFrontmatterJS, this.getFrontMatter(file));
+      }];
+      dirs.forEach(dir => {
+        const collection = {
+          name: path.basename(dir),
+          label: lib.capitaliseFirstChar(path.basename(dir).replace(/_/g, ' ').replace('-', ' ')),
+          folder: `content/${path.basename(dir)}`,
+        };
+        const combinedFrontmatterJS = {};
+        lib.getFiles(dir).forEach(file => {
+          merge(combinedFrontmatterJS, this.getFrontMatter(file));
+        });
+        collection.fields = this.generateFieldsFromFrontmatter(combinedFrontmatterJS, opts).concat(this.defaultFields(dir, opts));
+        this.collectionTransforms(collection, opts);
+        collections.push(collection);
       });
-      collection.fields = this.generateFieldsFromFrontmatter(combinedFrontmatterJS, opts).concat(this.defaultFields(dir, opts));
-      this.collectionTransforms(collection, opts);
-      final.collections.push(collection);
-    });
-    fs.writeFileSync(opts.dest, yaml.dump(final, opts.jsYamlOptions));
+      const configFilePath = opts.configFilePath || './static/admin/config.yml';
+      const configFileContents = lib.yamlFileToJs(configFilePath);
+      configFileContents.collections = collections;
+      fs.writeFileSync(configFilePath, yaml.dump(configFileContents, opts.jsYamlOptions));
+      console.log(chalk.green(`${configFilePath} was updated successfully.`));
+    } catch (err) {
+      console.log(chalk.red(err));
+    }
   },
 
   collectionTransforms(collection, opts) {
@@ -127,6 +134,6 @@ module.exports = {
     const fileContents = fs.readFileSync(file, 'utf8');
     const firstLine = fileContents.split(/\r?\n/)[0].trim();    
     const frontMatter = fileContents.split(firstLine)[1];
-    return (lib.yamlToJs(frontMatter) || [])[0];
+    return (lib.yamlToJs(frontMatter) || []);
   }
 };
