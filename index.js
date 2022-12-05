@@ -8,8 +8,9 @@ const chalk = require('chalk');
 module.exports = {
   run(opts) {
     try {
-      const files = lib.getFiles((opts.source || './content'), false);
-      const dirs = lib.getDirs((opts.source || './content'), false);
+      opts.absoluteSourcePath = path.resolve(process.cwd(), ((opts.source || './content')));
+      const files = lib.getFiles(opts.absoluteSourcePath, false);
+      const dirs = lib.getDirs(opts.absoluteSourcePath, false);
       const collections = [{
         name: 'single-pages',
         label: 'Single pages',
@@ -25,7 +26,7 @@ module.exports = {
         lib.getFiles(dir).forEach(file => {
           merge(combinedFrontmatterJS, this.getFrontMatter(file));
         });
-        collection.fields = this.generateFieldsFromFrontmatter(combinedFrontmatterJS, opts).concat(this.defaultFields(dir, opts));
+        collection.fields = this.generateFieldsFromFrontmatter(combinedFrontmatterJS, opts, dir).concat(this.defaultFields(dir, opts));
         this.collectionTransforms(collection, opts);
         collections.push(collection);
       });
@@ -58,27 +59,45 @@ module.exports = {
     }
   },
 
+  trim(str, char) {
+    return str.split(char).filter(item => item.length).join(char);
+  },
+
+  filePathRelativeToSource(filePath, opts) {
+    return this.trim(filePath.replace(opts.absoluteSourcePath, ''), '/');
+  },
+
+  filterByExcludeFilePaths(opts, objects, file) {
+    return (objects || []).filter(object => {
+      return (object.excludeFilePaths || []).indexOf(this.filePathRelativeToSource(file, opts)) < 0;
+    });
+  },
+
   defaultFields(file, opts) {
-    return (opts.defaultFields || []).filter(defaultField => {
-      return (defaultField.exclude || []).indexOf(path.basename(file, '.md'));
-    }).map(defaultField => defaultField.field);
+    return this.filterByExcludeFilePaths(opts, opts.defaultFields, file).map(defaultField => defaultField.field);
   },
 
   doFile(file, opts) {
     const frontmatterJS = this.getFrontMatter(file);
     const defaultFields = this.defaultFields(file, opts);
+    const customLabel = (opts.fileLabels || []).find(item => item.filePath === this.filePathRelativeToSource(file, opts)) || {};
+    // TODO custom label must be capable of being a function- so much everything else.
     return {
-      label: lib.capitaliseFirstChar(lib.basenameNoExt(file).replace(/_/g, ' ')),
+      label: customLabel.label || lib.capitaliseFirstChar(lib.basenameNoExt(file).replace(/[_-]/g, ' ')),
       name: lib.basenameNoExt(file),
       file: `/content/${path.basename(file)}`,
-      fields: this.generateFieldsFromFrontmatter(frontmatterJS, opts).concat(defaultFields)
+      fields: this.generateFieldsFromFrontmatter(frontmatterJS, opts, file).concat(defaultFields)
     };
   },
 
-  generateFieldsFromFrontmatter(frontmatterJS, opts) {
+  generateFieldsFromFrontmatter(frontmatterJS, opts, file) {
     const parseLevel = (obj) => {
       const fields = [];
       for (const key in obj) {
+        const omitKeys = this.filterByExcludeFilePaths(opts, opts.omitProps, file).map(item => item.propName);
+        if (omitKeys.indexOf(key) > -1) {
+          continue;
+        }
         let widgetType;
         if (Array.isArray(obj[key])) {
           widgetType = 'list';
@@ -93,22 +112,14 @@ module.exports = {
           widget: widgetType,
           required: false
         };
-        const keyMappings = opts.keyMappings || [];
-        const match  = keyMappings.find(item => item.keys.indexOf(field.name) > -1);
+        const mergeFields = opts.mergeFields || [];
+        const match  = mergeFields.find(item => item.fieldNames.indexOf(field.name) > -1);
        
         if (match) {
-          field = merge(field, match.field);
+          field = merge(field, match.mergeData);
           for (const key in field) {
             this.applyPropFunction(field, key, [frontmatterJS, opts]);
           }
-          // for (const key in matchField) {
-          //   if (typeof matchField[key] === 'function') {
-          //     console.log(key);
-          //     const newValue = matchField[key](frontmatterJS, opts);
-          //     matchField[key] = newValue;
-          //   }
-          // }
-
         }
         if (widgetType === 'object') {
           field['fields'] = parseLevel(obj[key]);
